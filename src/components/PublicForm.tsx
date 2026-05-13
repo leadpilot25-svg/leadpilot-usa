@@ -18,9 +18,10 @@ export default function PublicForm({ scriptUrl }: PublicFormProps) {
     whatsapp: '',
     email: '',
     location: '',
-    requirement: '',
+    propType: '',
+    bs: 'Buy',
     budget: '',
-    notes: ''
+    remarks: ''
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -38,23 +39,32 @@ export default function PublicForm({ scriptUrl }: PublicFormProps) {
     setError(null);
 
     try {
-      await fetch(scriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'addLead',
-          lead: {
-            ...formData,
-            status: 'New',
-            source: 'Public Form',
-            priority: 'Medium'
-          }
-        })
-      });
-
-      setSubmitted(true);
+      if (scriptUrl && scriptUrl.startsWith('http')) {
+        console.log("Public Form: Submitting to cloud:", scriptUrl);
+        // Using no-cors and removing headers that trigger preflight
+        await fetch(scriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          cache: 'no-cache',
+          body: JSON.stringify({
+            action: 'addLead',
+            lead: {
+              ...formData,
+              status: 'New',
+              source: 'Public Form',
+              priority: 'Medium'
+            }
+          })
+        });
+        
+        // Since no-cors doesn't allow reading response, we assume success or handle timeout
+        setSubmitted(true);
+      } else {
+        console.warn("Public Form: Script URL missing or invalid. Check your environment variables.");
+        setError('System error: Form is not connected to database. Please contact the owner.');
+      }
     } catch (err) {
+      console.error("Public Form Submission Error:", err);
       setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -163,32 +173,49 @@ export default function PublicForm({ scriptUrl }: PublicFormProps) {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Search size={12} />
+                  Interested In
+                </label>
+                <select 
+                  name="bs"
+                  value={formData.bs}
+                  onChange={handleChange as any}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-sm text-slate-900 focus:border-primary outline-none transition-all appearance-none"
+                >
+                  <option value="Buy">Buy</option>
+                  <option value="Rent">Rent</option>
+                  <option value="Sell">Sell</option>
+                </select>
+              </div>
               <FormInput 
                 icon={<Search size={18} />} 
-                label="Requirement" 
-                name="requirement" 
-                value={formData.requirement} 
+                label="Property Type" 
+                name="propType" 
+                value={formData.propType} 
                 onChange={handleChange} 
                 placeholder="e.g. 2BHK Appt"
               />
-              <FormInput 
-                icon={<DollarSign size={18} />} 
-                label="Budget Range" 
-                name="budget" 
-                value={formData.budget} 
-                onChange={handleChange} 
-                placeholder="e.g. $500k - $700k"
-              />
             </div>
+
+            <FormInput 
+              icon={<DollarSign size={18} />} 
+              label="Budget Range" 
+              name="budget" 
+              value={formData.budget} 
+              onChange={handleChange} 
+              placeholder="e.g. $500k - $700k"
+            />
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <FileText size={12} />
-                Additional Notes
+                Additional Remarks
               </label>
               <textarea 
-                name="notes"
-                value={formData.notes}
+                name="remarks"
+                value={formData.remarks}
                 onChange={handleChange}
                 placeholder="Tell us more about what you are looking for..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary outline-none min-h-[100px] resize-none transition-all"
