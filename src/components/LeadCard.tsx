@@ -97,9 +97,14 @@ export default function LeadCard({ lead, onClick, onDelete }: LeadCardProps) {
             <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border", statusStyles[lead.status] || statusStyles['New'])}>
               {lead.status || 'New'}
             </span>
-            {lead.requirement && (
+            {lead.bs && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                {lead.bs}
+              </span>
+            )}
+            {lead.propType && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 border border-slate-100 text-slate-500">
-                {lead.requirement}
+                {lead.propType}
               </span>
             )}
           </div>
@@ -113,10 +118,31 @@ export default function LeadCard({ lead, onClick, onDelete }: LeadCardProps) {
       </div>
 
       {lead.followUp && (
-        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mb-3 px-1 bg-slate-50 rounded-lg p-1.5 border border-slate-100 inline-flex">
-          <Calendar size={12} className="text-slate-400" />
-          <span className="opacity-70">Follow-up:</span>
-          <span className="font-semibold text-slate-700">{formatDate(lead.followUp)}</span>
+        <div className={cn(
+          "text-[11px] flex items-center gap-1.5 mb-3 px-1.5 py-1 rounded-lg border inline-flex",
+          (() => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const fDate = new Date(lead.followUp);
+            fDate.setHours(0,0,0,0);
+            if (fDate.getTime() < today.getTime()) return "bg-rose-50 text-rose-600 border-rose-100 shadow-sm shadow-rose-100/50";
+            if (fDate.getTime() === today.getTime()) return "bg-amber-50 text-amber-600 border-amber-100 shadow-sm shadow-amber-100/50";
+            return "bg-emerald-50 text-emerald-600 border-emerald-100 shadow-sm shadow-emerald-100/50";
+          })()
+        )}>
+          <Calendar size={12} className="opacity-70" />
+          <span className="font-bold">
+            {(() => {
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              const fDate = new Date(lead.followUp);
+              fDate.setHours(0,0,0,0);
+              if (fDate.getTime() < today.getTime()) return "OVERDUE";
+              if (fDate.getTime() === today.getTime()) return "TODAY";
+              return "COMING UP";
+            })()}:
+          </span>
+          <span className="font-semibold">{formatDate(lead.followUp)}</span>
         </div>
       )}
 
