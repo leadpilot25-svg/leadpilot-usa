@@ -1,27 +1,45 @@
-/**
- * LeadPilot CRM Backend - Simplified
- * 
- * Instructions:
- * 1. Create a Google Sheet.
- * 2. Rename the first sheet to "Leads".
- * 3. Add these headers in row 1:
- *    Timestamp | First Name | Last Name | Phone | Email | Location | Remarks | Status | Follow-up | Priority | Source | Prop Type
- * 4. Open Extensions > Apps Script.
- * 5. Paste this code.
- * 6. Deploy > New Deployment > Web App.
- * 7. Set "Execute as: Me" and "Who has access: Anyone".
- * 8. Copy the Web App URL and set it as VITE_GAS_SCRIPT_URL in your environment.
- */
-
 const SHEET_NAME = 'Leads';
 
+// The exact headers you provided
+const HEADERS = [
+  'Timestamp', 'First Name', 'Last Name', 'Phone', 'WhatsApp', 'Email', 
+  'B/S', 'Prop Type', 'Budget', 'Source', 'Location', 'Remarks', 
+  'Status', 'Follow-up', 'Call Done', 'Call Result', 'Prop Value', 
+  'Commission', 'Exp Comm', 'Priority', 'Urgency', 'Quick Chat', 
+  'Agent Email', 'Agent Name'
+];
+
+function setup() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+  }
+  
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+       .setBackground('#f3f4f6')
+       .setFontWeight('bold');
+  
+  sheet.setFrozenRows(1);
+}
+
 function doGet(e) {
+  // Safety check for manual runs in editor
+  if (!e || !e.parameter) {
+    return ContentService.createTextOutput("Script is running. Please use the Web App URL in your CRM settings.")
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+
   const action = e.parameter.action;
   
-  if (action === 'getLeads') return getLeads();
-  if (action === 'getDashboard') return getDashboard();
+  if (action === 'getLeads') {
+    return createJsonResponse({
+      success: true,
+      leads: getLeads()
+    });
+  }
   
-  return jsonResponse({ success: false, message: 'Invalid action' });
+  return createJsonResponse({ success: false, message: 'Invalid action' });
 }
 
 function doPost(e) {
@@ -29,142 +47,109 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     const action = data.action;
     
-    if (action === 'addLead') return addLead(data.lead);
-    if (action === 'updateLead') return updateLead(data.rowIndex, data.lead);
-    if (action === 'deleteLead') return deleteLead(data.rowIndex);
+    if (action === 'addLead') {
+      addLead(data.lead);
+      return createJsonResponse({ success: true });
+    }
     
-    return jsonResponse({ success: false, message: 'Invalid action' });
-  } catch (error) {
-    return jsonResponse({ success: false, error: error.toString() });
+    if (action === 'updateLead') {
+      updateLead(data.rowIndex, data.lead);
+      return createJsonResponse({ success: true });
+    }
+    
+    if (action === 'deleteLead') {
+      deleteLead(data.rowIndex);
+      return createJsonResponse({ success: true });
+    }
+    
+    return createJsonResponse({ success: false, message: 'Invalid action' });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.toString() });
   }
 }
 
 function getLeads() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet) return jsonResponse({ success: true, leads: [] });
-  
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
-  const rows = data.slice(1);
+  const leads = [];
   
-  const leads = rows.map((row, index) => {
-    const lead = { rowIndex: index + 2 };
-    headers.forEach((header, i) => {
-      const key = toCamelCase(header);
-      lead[key] = row[i];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const lead = { rowIndex: i + 1 };
+    headers.forEach((header, index) => {
+      const key = mappingKey(header);
+      let value = row[index];
+      if (value instanceof Date) {
+        value = value.toISOString().split('T')[0];
+      }
+      lead[key] = value;
     });
-    return lead;
-  });
+    leads.push(lead);
+  }
   
-  return jsonResponse({ success: true, leads: leads.reverse() });
+  return leads.reverse(); 
 }
 
-function getDashboard() {
+function addLead(lead) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet || sheet.getLastRow() <= 1) return jsonResponse({ success: true, stats: { total: 0, today: 0, upcoming: 0, overdue: 0, hot: 0, byStatus: {} } });
-  
-  const data = sheet.getDataRange().getValues();
-  const rows = data.slice(1);
-  
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  
-  const stats = {
-    total: rows.length,
-    today: 0,
-    upcoming: 0,
-    overdue: 0,
-    hot: 0,
-    byStatus: {}
-  };
-  
-  const headers = data[0];
-  const followupIdx = headers.indexOf('Follow-up');
-  const statusIdx = headers.indexOf('Status');
-  const priorityIdx = headers.indexOf('Priority');
-  
-  rows.forEach(row => {
-    const followupStr = row[followupIdx];
-    const status = row[statusIdx];
-    const priority = row[priorityIdx];
-    
-    if (priority === 'Hot') stats.hot++;
-    stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
-    
-    if (followupStr && status !== 'Closed') {
-      const fDate = new Date(followupStr);
-      fDate.setHours(0,0,0,0);
-      
-      if (fDate.getTime() === now.getTime()) {
-        stats.today++;
-      } else if (fDate.getTime() < now.getTime()) {
-        stats.overdue++;
-      } else {
-        stats.upcoming++;
-      }
-    }
-  });
-  
-  return jsonResponse({ success: true, stats });
-}
-
-function addLead(leadData) {
-  let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(SHEET_NAME);
-    sheet.appendRow(['Timestamp', 'First Name', 'Last Name', 'Phone', 'WhatsApp', 'Email', 'Location', 'Requirement', 'Budget', 'Notes', 'Status', 'Follow-up', 'Priority', 'Source']);
-  }
-  
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const phoneIdx = headers.indexOf('Phone');
-  
-  // Check duplicate
-  if (phoneIdx !== -1 && leadData.phone) {
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const existingPhones = sheet.getRange(2, phoneIdx + 1, lastRow - 1, 1).getValues().flat().map(String);
-      if (existingPhones.includes(String(leadData.phone))) {
-        return jsonResponse({ success: false, error: 'A lead with this phone number already exists.' });
-      }
-    }
-  }
-  
-  const newRow = headers.map(header => {
+  const rowData = HEADERS.map(header => {
     if (header === 'Timestamp') return new Date();
-    const key = toCamelCase(header);
-    return leadData[key] || '';
+    const key = mappingKey(header);
+    return lead[key] || '';
   });
-  
-  sheet.appendRow(newRow);
-  return jsonResponse({ success: true });
+  sheet.appendRow(rowData);
 }
 
 function updateLead(rowIndex, leadData) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
-  headers.forEach((header, i) => {
-    const key = toCamelCase(header);
-    if (leadData.hasOwnProperty(key)) {
-      sheet.getRange(rowIndex, i + 1).setValue(leadData[key]);
+  Object.keys(leadData).forEach(key => {
+    const colIndex = headers.findIndex(h => mappingKey(h) === key);
+    if (colIndex !== -1) {
+      sheet.getRange(rowIndex, colIndex + 1).setValue(leadData[key]);
     }
   });
-  
-  return jsonResponse({ success: true });
 }
 
 function deleteLead(rowIndex) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
   sheet.deleteRow(rowIndex);
-  return jsonResponse({ success: true });
 }
 
-function jsonResponse(data) {
+function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function toCamelCase(str) {
-  return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
-            .replace(/^[A-Z]/, c => c.toLowerCase());
+// Maps spreadsheet headers to stable Javascript keys
+function mappingKey(header) {
+  const map = {
+    'Timestamp': 'timestamp',
+    'First Name': 'firstName',
+    'Last Name': 'lastName',
+    'Phone': 'phone',
+    'WhatsApp': 'whatsapp',
+    'Email': 'email',
+    'B/S': 'bs',
+    'Prop Type': 'propType',
+    'Budget': 'budget',
+    'Source': 'source',
+    'Location': 'location',
+    'Remarks': 'remarks',
+    'Status': 'status',
+    'Follow-up': 'followUp',
+    'Call Done': 'callDone',
+    'Call Result': 'callResult',
+    'Prop Value': 'propValue',
+    'Commission': 'commission',
+    'Exp Comm': 'expComm',
+    'Priority': 'priority',
+    'Urgency': 'urgency',
+    'Quick Chat': 'quickChat',
+    'Agent Email': 'agentEmail',
+    'Agent Name': 'agentName'
+  };
+  return map[header] || header.toLowerCase().replace(/\s+/g, '');
 }
