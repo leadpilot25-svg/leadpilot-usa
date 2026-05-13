@@ -6,14 +6,24 @@ export interface Lead {
   phone: string;
   whatsapp: string;
   email: string;
-  location: string;
-  requirement: string;
+  bs: string;
+  propType: string;
   budget: string;
-  notes: string;
-  status: string; // New, Contacted, Qualified, Negotiating, Closed, Lost
-  followUp: string;
-  priority: 'Hot' | 'Medium' | 'Low' | '';
   source: string;
+  location: string;
+  remarks: string;
+  status: string;
+  followUp: string;
+  callDone: string;
+  callResult: string;
+  propValue: string;
+  commission: string;
+  expComm: string;
+  priority: 'Hot' | 'Medium' | 'Low' | '';
+  urgency: string;
+  quickChat: string;
+  agentEmail: string;
+  agentName: string;
 }
 
 export interface DashboardStats {
@@ -25,7 +35,7 @@ export interface DashboardStats {
   byStatus: Record<string, number>;
 }
 
-export type View = 'dashboard' | 'leads' | 'followups' | 'analytics';
+export type View = 'dashboard' | 'leads' | 'followups' | 'analytics' | 'settings';
 
 export interface Toast {
   id: string;
