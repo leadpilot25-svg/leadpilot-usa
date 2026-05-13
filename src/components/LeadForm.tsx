@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, Save, User, Phone, MapPin, Calendar, FileText, Globe } from 'lucide-react';
+import { X, Save, User, Phone, MapPin, Calendar, FileText, Globe, ChevronLeft } from 'lucide-react';
 import { Lead } from '../types';
 
 interface LeadFormProps {
@@ -21,11 +21,13 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
     location: '',
     status: 'New',
     priority: 'Medium',
-    notes: '',
+    remarks: '',
     followUp: '',
     source: '',
-    requirement: '',
+    propType: '',
+    bs: 'Buy',
     budget: '',
+    agentName: '',
   });
 
   useEffect(() => {
@@ -44,11 +46,13 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
         location: '',
         status: 'New',
         priority: 'Medium',
-        notes: '',
+        remarks: '',
         followUp: '',
         source: '',
-        requirement: '',
+        propType: '',
+        bs: 'Buy',
         budget: '',
+        agentName: '',
       });
     }
   }, [initialData, isOpen]);
@@ -92,9 +96,14 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
         className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-          <h2 className="text-xl font-bold text-slate-900">
-            {initialData ? 'Edit Lead' : 'New Lead'}
-          </h2>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+              <ChevronLeft size={20} />
+            </button>
+            <h2 className="text-xl font-bold text-slate-900">
+              {initialData ? 'Edit Lead' : 'New Lead'}
+            </h2>
+          </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
             <X size={24} />
           </button>
@@ -194,15 +203,31 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">Requirement</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">B/S Type</label>
+                <select 
+                  name="bs"
+                  value={formData.bs}
+                  onChange={handleChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors appearance-none text-slate-900"
+                >
+                  <option value="Buy">Buy</option>
+                  <option value="Sell">Sell</option>
+                  <option value="Rent">Rent</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">Prop Type</label>
                 <input 
-                  name="requirement"
-                  value={formData.requirement}
+                  name="propType"
+                  value={formData.propType}
                   onChange={handleChange}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors text-slate-900"
                   placeholder="e.g. 2BHK"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">Budget</label>
                 <input 
@@ -211,6 +236,16 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
                   onChange={handleChange}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors text-slate-900"
                   placeholder="e.g. $1M"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">Agent Name</label>
+                <input 
+                  name="agentName"
+                  value={formData.agentName}
+                  onChange={handleChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors text-slate-900"
+                  placeholder="Your Name"
                 />
               </div>
             </div>
@@ -281,16 +316,16 @@ export default function LeadForm({ isOpen, onClose, onSubmit, initialData }: Lea
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+              <label className="text-xs font-bold text-slate-500 ml-1">Remarks</label>
               <div className="relative">
                 <FileText size={14} className="absolute left-4 top-4 text-slate-400" />
                 <textarea 
-                  name="notes"
-                  value={formData.notes}
+                  name="remarks"
+                  value={formData.remarks}
                   onChange={handleChange}
                   rows={3}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:border-primary outline-none transition-colors resize-none text-slate-900"
-                  placeholder="Notes..."
+                  placeholder="Remarks..."
                 />
               </div>
             </div>
