@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", sans-serif;
+  
+  --color-primary: #22c55e;
+  --color-bg-light: #f7f9fc;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-light text-slate-900 font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .white-card {
+    @apply bg-white border border-slate-200 shadow-sm;
+  }
+  
+  .white-card-hover {
+    @apply hover:border-primary/30 hover:shadow-md transition-all duration-200;
+  }
+}
