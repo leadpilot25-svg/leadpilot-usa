@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, Calendar, BarChart3, LayoutGrid, Search, 
   Plus, RefreshCcw, Bell, Filter, TrendingUp, AlertCircle,
-  Download, LogOut, Lock, CheckCircle2, XCircle, Info
+  Download, LogOut, Lock, CheckCircle2, XCircle, Info,
+  ChevronLeft, Settings, Globe, Database
 } from 'lucide-react';
 import { Lead, DashboardStats, View, Toast } from './types';
 import { formatDate, cn } from './lib/utils';
@@ -13,8 +14,7 @@ import PublicForm from './components/PublicForm';
 import { Send } from 'lucide-react';
 
 // @ts-ignore
-const SCRIPT_URL = import.meta.env.VITE_GAS_SCRIPT_URL;
-const CRM_PIN = "1234"; // Default PIN for access
+const DEFAULT_SCRIPT_URL = import.meta.env.VITE_GAS_SCRIPT_URL;
 
 export default function App() {
   const [isFormMode, setIsFormMode] = useState(false);
@@ -26,6 +26,15 @@ export default function App() {
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | undefined>(undefined);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  
+  // Settings logic for multi-client support
+  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('v2_script_url') || DEFAULT_SCRIPT_URL || '');
+
+  useEffect(() => {
+    if (!scriptUrl || !scriptUrl.startsWith('http')) {
+      console.warn("CRM CONFIG: Script URL is missing or invalid. Cloud sync will not work.");
+    }
+  }, [scriptUrl]);
 
   const addToast = (message: string, type: Toast['type'] = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -45,9 +54,10 @@ export default function App() {
     }
 
     // Then attempt to sync with cloud
-    if (SCRIPT_URL && !SCRIPT_URL.includes('...')) {
+    if (scriptUrl && scriptUrl.startsWith('http')) {
       try {
-        const response = await fetch(`${SCRIPT_URL}?action=getLeads`);
+        console.log("Attempting to fetch from cloud...");
+        const response = await fetch(`${scriptUrl}?action=getLeads`);
         const data = await response.json();
         if (data.success) {
           setLeads(data.leads);
@@ -58,19 +68,27 @@ export default function App() {
         console.error('Cloud fetch failed:', error);
         addToast('Cloud Sync Offline', 'info');
       }
-    } else {
-      addToast('Local Mode: Set Script URL for Cloud Sync', 'info');
     }
     
     setLoading(false);
   };
 
   useEffect(() => {
-    syncData();
-    if (window.location.search.includes('form=true')) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('form') === 'true') {
       setIsFormMode(true);
+      const s = params.get('s');
+      if (s) {
+        try {
+          const decoded = atob(s);
+          if (decoded.startsWith('http')) {
+            setScriptUrl(decoded);
+          }
+        } catch(e) {}
+      }
     }
-  }, []);
+    syncData();
+  }, [scriptUrl]);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -136,26 +154,31 @@ export default function App() {
       addToast(selectedLead ? 'Saving Changes...' : 'Adding Lead...', 'info');
 
       // Sync to cloud
-      if (SCRIPT_URL && !SCRIPT_URL.includes('...')) {
-        await fetch(SCRIPT_URL, {
+      if (scriptUrl && scriptUrl.startsWith('http')) {
+        console.log("Sync: Sending to cloud...", isNew ? 'add' : 'update');
+        fetch(scriptUrl, {
           method: 'POST',
           mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-cache',
           body: JSON.stringify({
             action: isNew ? 'addLead' : 'updateLead',
             rowIndex: selectedLead?.rowIndex,
-            lead: data
+            lead: updatedLead
           })
         });
-        addToast('Synced to Cloud', 'success');
-        // Refresh after short delay to get correct rowIndex from GS if it was a new lead
+        
+        addToast('Syncing to Cloud...', 'info');
+        // Refresh after short delay to get the real rowIndex 
         if (isNew) {
-           setTimeout(() => syncData(), 2000);
+           setTimeout(() => syncData(), 3000);
+        } else {
+           setTimeout(() => addToast('Synced!', 'success'), 1000);
         }
       } else {
         addToast(selectedLead ? 'Updated Locally' : 'Added Locally', 'success');
       }
     } catch (error) {
+      console.error("Save Error:", error);
       addToast('Sync Failed', 'error');
     }
   };
@@ -167,16 +190,18 @@ export default function App() {
       localStorage.setItem('leadpilot_leads', JSON.stringify(newLeads));
       addToast('Deleting...', 'info');
 
-      if (SCRIPT_URL && !SCRIPT_URL.includes('...')) {
-        await fetch(SCRIPT_URL, {
+      if (scriptUrl && scriptUrl.startsWith('http')) {
+        fetch(scriptUrl, {
           method: 'POST',
           mode: 'no-cors',
+          cache: 'no-cache',
           body: JSON.stringify({
             action: 'deleteLead',
             rowIndex: lead.rowIndex
           })
         });
-        addToast('Deleted from Cloud', 'success');
+        addToast('Deletion Syncing...', 'info');
+        setTimeout(() => addToast('Deleted!', 'success'), 1500);
       } else {
         addToast('Removed Locally', 'success');
       }
@@ -187,11 +212,19 @@ export default function App() {
 
   const exportToCSV = () => {
     if (leads.length === 0) return;
-    const headers = ['Timestamp', 'First Name', 'Last Name', 'Phone', 'WhatsApp', 'Email', 'Location', 'Requirement', 'Budget', 'Notes', 'Status', 'Follow-up', 'Priority', 'Source'];
+    const headers = [
+      'Timestamp', 'First Name', 'Last Name', 'Phone', 'WhatsApp', 'Email', 
+      'B/S', 'Prop Type', 'Budget', 'Source', 'Location', 'Remarks', 
+      'Status', 'Follow-up', 'Call Done', 'Call Result', 'Prop Value', 
+      'Commission', 'Exp Comm', 'Priority', 'Urgency', 'Quick Chat', 
+      'Agent Email', 'Agent Name'
+    ];
     const rows = leads.map(l => [
       l.timestamp, l.firstName, l.lastName, l.phone, l.whatsapp, l.email, 
-      l.location, l.requirement, l.budget, l.notes, l.status, l.followUp, 
-      l.priority, l.source
+      l.bs, l.propType, l.budget, l.source, l.location, l.remarks, 
+      l.status, l.followUp, l.callDone, l.callResult, l.propValue,
+      l.commission, l.expComm, l.priority, l.urgency, l.quickChat,
+      l.agentEmail, l.agentName
     ].map(v => `"${v || ''}"`).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -204,38 +237,42 @@ export default function App() {
   };
 
   const shareFormLink = () => {
-    const url = `${window.location.origin}${window.location.pathname}?form=true`;
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    const sParam = scriptUrl ? `&s=${btoa(scriptUrl)}` : '';
+    const url = `${baseUrl}?form=true${sParam}`;
     navigator.clipboard.writeText(url);
     addToast('Form Link Copied!', 'success');
   };
 
   const filteredLeads = useMemo(() => {
     let list = leads;
+    
+    if (view === 'followups') {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      list = list.filter(l => {
+        if (!l.followUp || l.status === 'Closed') return false;
+        const fDate = new Date(l.followUp);
+        fDate.setHours(0,0,0,0);
+        // User wants today + overdue for Tasks tab
+        return fDate.getTime() <= today.getTime();
+      });
+    }
+
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       list = list.filter(l => 
         `${l.firstName} ${l.lastName}`.toLowerCase().includes(q) ||
         (l.phone && l.phone.includes(q)) ||
         (l.location && l.location.toLowerCase().includes(q))
       );
     }
-    
-    if (view === 'followups') {
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      return list.filter(l => {
-        if (!l.followUp || l.status === 'Closed') return false;
-        const fDate = new Date(l.followUp);
-        fDate.setHours(0,0,0,0);
-        return fDate.getTime() <= today.getTime();
-      });
-    }
 
     return list;
   }, [leads, searchQuery, view]);
 
   if (isFormMode) {
-    return <PublicForm scriptUrl={SCRIPT_URL} />;
+    return <PublicForm scriptUrl={scriptUrl} />;
   }
 
   return (
@@ -257,6 +294,11 @@ export default function App() {
               icon={<Search size={20} />} 
               active={isSearchOpen}
               onClick={() => setIsSearchOpen(!isSearchOpen)} 
+            />
+            <HeaderAction 
+              icon={<Settings size={20} />} 
+              active={view === 'settings'}
+              onClick={() => setView('settings')} 
             />
             <HeaderAction 
               icon={<RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />} 
@@ -394,9 +436,17 @@ export default function App() {
               className="space-y-4"
             >
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-bold text-slate-900">
-                  {view === 'leads' ? 'Lead Pipeline' : 'Today\'s Agenda'}
-                </h2>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setView('dashboard')}
+                    className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {view === 'leads' ? 'Lead Pipeline' : 'Daily Tasks'}
+                  </h2>
+                </div>
                 <div className="flex gap-2">
                    <button className="white-card p-2 rounded-lg text-slate-400">
                     <Filter size={16} />
@@ -433,7 +483,15 @@ export default function App() {
               exit={{ opacity: 0, x: 10 }}
               className="space-y-6"
             >
-              <h2 className="text-xl font-bold text-slate-900">CRM Analytics</h2>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setView('dashboard')}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <h2 className="text-xl font-bold text-slate-900">CRM Analytics</h2>
+              </div>
               
               <div className="white-card rounded-2xl p-6 space-y-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Leads by Status</h3>
@@ -471,6 +529,72 @@ export default function App() {
               </div>
             </motion.div>
           )}
+          {view === 'settings' && (
+            <motion.div 
+              key="settings"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              className="space-y-6"
+            >
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setView('dashboard')}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <h2 className="text-xl font-bold text-slate-900">CRM Settings</h2>
+              </div>
+              
+              <div className="white-card rounded-2xl p-6 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-widest">
+                    <Database size={14} />
+                    <span>Google Sheets Connection</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500">Google Apps Script URL</label>
+                    <textarea 
+                      value={scriptUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setScriptUrl(val);
+                        localStorage.setItem('v2_script_url', val);
+                      }}
+                      rows={4}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:border-primary outline-none transition-colors break-all"
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                    />
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Paste your Google Web App URL here. This allows you to use different sheets for different accounts.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <button 
+                    onClick={() => {
+                      setScriptUrl(DEFAULT_SCRIPT_URL || '');
+                      localStorage.removeItem('v2_script_url');
+                      addToast('Reset to Default', 'info');
+                    }}
+                    className="text-xs font-bold text-rose-500 uppercase tracking-wider"
+                  >
+                    Reset to Default Sync
+                  </button>
+                </div>
+              </div>
+
+              <div className="white-card rounded-2xl p-6 space-y-4 text-center">
+                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Info size={24} className="text-slate-400" />
+                 </div>
+                 <h3 className="font-bold text-slate-900">Need Help?</h3>
+                 <p className="text-xs text-slate-500">Contact our support to setup your custom lead tracking system.</p>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -500,7 +624,7 @@ export default function App() {
           />
           <NavItem 
             icon={<Calendar size={22} />} 
-            label="Agenda" 
+            label="Tasks" 
             active={view === 'followups'} 
             onClick={() => setView('followups')} 
           />
